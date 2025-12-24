@@ -13,6 +13,7 @@ public class TCP_Sender extends TCP_Sender_ADT {
 	
 	private TCP_PACKET tcpPack;	//待发送的TCP数据报
 	private volatile int flag = 0;
+	private int expectedAck;
 	
 	/*构造函数*/
 	public TCP_Sender() {
@@ -31,21 +32,35 @@ public class TCP_Sender extends TCP_Sender_ADT {
 		//更新带有checksum的TCP 报文头		
 		tcpH.setTh_sum(CheckSum.computeChkSum(tcpPack));
 		tcpPack.setTcpH(tcpH);
+
+		int seq = dataIndex * appData.length + 1;
+		expectedAck = seq;;
 		
 		//发送TCP数据报
 		udt_send(tcpPack);
 		flag = 0;
 		
 		//等待ACK报文
-		//waitACK();
-		while (flag==0);
+		long startTime = System.currentTimeMillis();
+		long timeout = 2000;
+
+		while (flag == 0){
+			//waitACK();
+			if (System.currentTimeMillis() - startTime > timeout) {
+				System.out.println("Timeout, retransmitting: " + tcpPack.getTcpH().getTh_seq());
+				udt_send(tcpPack);
+				startTime = System.currentTimeMillis();
+			}
+		}
+
+		System.out.println("Packet " + seq + "sent successfully.");
 	}
 	
 	@Override
 	//不可靠发送：将打包好的TCP数据报通过不可靠传输信道发送；仅需修改错误标志
 	public void udt_send(TCP_PACKET stcpPack) {
 		//设置错误控制标志
-		tcpH.setTh_eflag((byte)0);		
+		tcpH.setTh_eflag((byte)1);
 		//System.out.println("to send: "+stcpPack.getTcpH().getTh_seq());				
 		//发送数据报
 		client.send(stcpPack);
@@ -58,14 +73,18 @@ public class TCP_Sender extends TCP_Sender_ADT {
 		//循环检查确认号对列中是否有新收到的ACK		
 		if(!ackQueue.isEmpty()){
 			int currentAck=ackQueue.poll();
-			// System.out.println("CurrentAck: "+currentAck);
-			if (currentAck == tcpPack.getTcpH().getTh_seq()){
+			System.out.println("CurrentAck: "+currentAck);
+			if (currentAck == expectedAck){
 				System.out.println("Clear: "+tcpPack.getTcpH().getTh_seq());
 				flag = 1;
 				//break;
-			}else{
+			}else if(currentAck == expectedAck-100){
+				System.out.println("Duplicate ACK received: " + currentAck);
 				System.out.println("Retransmit: "+tcpPack.getTcpH().getTh_seq());
 				udt_send(tcpPack);
+				flag = 0;
+			}else {
+				System.out.println("Unexpected ACK: " + currentAck);
 				flag = 0;
 			}
 		}
