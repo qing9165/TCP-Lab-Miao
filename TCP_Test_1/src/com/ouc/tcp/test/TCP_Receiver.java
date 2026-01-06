@@ -30,7 +30,6 @@ public class TCP_Receiver extends TCP_Receiver_ADT {
 	@Override
 	//接收到数据报：检查校验和，设置回复的ACK报文段
 	public void rdt_recv(TCP_PACKET recvPack) {
-		//更新最后一次收到ACK的时间
 		lastAckTime = System.currentTimeMillis();
 		//检查校验码，生成ACK
 		if(CheckSum.computeChkSum(recvPack) == recvPack.getTcpH().getTh_sum()) {
@@ -39,7 +38,7 @@ public class TCP_Receiver extends TCP_Receiver_ADT {
 			if (recvSeq == expectseq) {
 				dataQueue.add(recvPack.getTcpS().getData());
 				expectseq+=100;
-				tcpH.setTh_ack(expectseq);
+				tcpH.setTh_ack(expectseq-100);
 				ackPack = new TCP_PACKET(tcpH, tcpS, recvPack.getSourceAddr());
 				tcpH.setTh_sum(CheckSum.computeChkSum(ackPack));
 				reply(ackPack);
@@ -95,7 +94,7 @@ public class TCP_Receiver extends TCP_Receiver_ADT {
 		tcpH.setTh_eflag((byte)4);	//eFlag=0，信道无错误
 				
 		//发送数据报
-		if (System.currentTimeMillis() - lastAckTime > 5000) {
+		if (System.currentTimeMillis() - lastAckTime > 3000) {
 			if (!dataQueue.isEmpty()) {
 				deliver_data();
 			}

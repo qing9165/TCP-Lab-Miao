@@ -93,15 +93,15 @@ public class TCP_Sender extends TCP_Sender_ADT {
 		while(!ackQueue.isEmpty()){
 			int currentAck=ackQueue.poll();
 			System.out.println("CurrentAck: "+currentAck);
-			if (currentAck > base) {
+			if (currentAck >= base) {
 				for (TCP_PACKET tcpPack : sentPackets) {
 					System.out.println("Packets in Queue: "+tcpPack.getTcpH().getTh_seq());
 				}
-				while (!sentPackets.isEmpty() && sentPackets.peek().getTcpH().getTh_seq() < currentAck) {
+				while (!sentPackets.isEmpty() && sentPackets.peek().getTcpH().getTh_seq() <= currentAck) {
 					sentPackets.poll();
 					System.out.println("SentPacket: "+sentPackets.size());
-					base+=100;
 				}
+				base = currentAck + 100;
 				if (sentPackets.isEmpty()) stopTimer();
 				else startTimer();
 			}else {
