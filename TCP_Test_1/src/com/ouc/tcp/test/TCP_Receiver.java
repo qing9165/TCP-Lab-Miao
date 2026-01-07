@@ -53,7 +53,12 @@ public class TCP_Receiver extends TCP_Receiver_ADT {
 					expectseq+=100;
 					nowAcked = recvSeq;
 					checkSave();
-					sendACK(recvPack);
+					if (nowAcked == base - 100 + N*100) {
+						if (savedPackets.containsKey(nowAcked)) {
+							sendACK(savedPackets.get(nowAcked));
+						}
+						else sendACK(recvPack);
+					}
 					System.out.println("Recieved Packet "+(expectseq-100));
 				}
 				//乱序
@@ -134,15 +139,13 @@ public class TCP_Receiver extends TCP_Receiver_ADT {
 		tcpH.setTh_eflag((byte)7);	//eFlag=0，信道无错误
 				
 		//发送数据报
-		if (nowAcked >= base + N*100 || timer == null ) {
-			client.send(replyPack);
-			base = nowAcked + 100;
-			if (timer != null) {
-				timer.cancel();
-			}
-			timer=new UDT_Timer();
-			task=new UDT_RetransTask(client, replyPack);
-			timer.schedule(task,500,500);
+		client.send(replyPack);
+		base = nowAcked + 100;
+		if (timer != null) {
+			timer.cancel();
 		}
+		timer=new UDT_Timer();
+		task=new UDT_RetransTask(client, replyPack);
+		timer.schedule(task,500,500);
 	}
 }
