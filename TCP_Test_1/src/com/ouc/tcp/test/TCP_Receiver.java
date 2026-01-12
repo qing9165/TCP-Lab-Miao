@@ -22,7 +22,7 @@ public class TCP_Receiver extends TCP_Receiver_ADT {
 	private UDT_RetransTask task;
 	private UDT_Timer timer;
 	private HashMap<Integer, TCP_PACKET> savedPackets = new HashMap<>();
-	private final int N = 8;
+	private int N = 8;
 	private int base = 1;
 	private HashMap<Integer, Boolean> receivedPackets = new HashMap<>();
 		
@@ -40,10 +40,11 @@ public class TCP_Receiver extends TCP_Receiver_ADT {
 		System.out.println("Recv Seq: " + recvSeq + " Base: " + base + " Expectseq: " + expectseq);
 		if(CheckSum.computeChkSum(recvPack) == recvPack.getTcpH().getTh_sum()) {
 			//检查序列号在窗口内
-			if (recvSeq >= base && recvSeq <= base + N*100) {
+			if (recvSeq >= base) {
 				//检查是否重复接收
 				if (receivedPackets.containsKey(recvSeq)) {
 					System.out.println("Recv packet received");
+					sendACK(recvPack);
 					return;
 				}
 				receivedPackets.put(recvSeq, true);
@@ -53,30 +54,27 @@ public class TCP_Receiver extends TCP_Receiver_ADT {
 					expectseq+=100;
 					nowAcked = recvSeq;
 					checkSave();
-					if (nowAcked == base - 100 + N*100) {
+					//if (nowAcked >= base - 100 + N*100) {
 						if (savedPackets.containsKey(nowAcked)) {
 							sendACK(savedPackets.get(nowAcked));
 						}
 						else sendACK(recvPack);
-					}
+					//}
 					System.out.println("Recieved Packet "+(expectseq-100));
 				}
 				//乱序
 				else if (recvSeq > expectseq) {
 					savedPackets.put(recvSeq, recvPack);
-				}
-				//旧包
-				else System.out.println("Recieved old Packet "+ recvSeq);
-			}
-			//不在窗口内
-			else  {
-				System.out.println("Recieved packet but not received" + recvSeq);
+					sendACK(recvPack);
+				} else sendACK(recvPack);
 			}
 		} else {
 			System.out.println("Recieve Computed: "+CheckSum.computeChkSum(recvPack));
 			System.out.println("Recieved Packet"+recvPack.getTcpH().getTh_sum());
 			System.out.println("Problem: Packet Number: "+recvPack.getTcpH().getTh_seq()+" + InnerSeq:  "+expectseq);
+			sendACK(recvPack);
 		}
+
 		//交付数据（每20组数据交付一次）
 		if(dataQueue.size() == 20)
 			deliver_data();
@@ -139,7 +137,7 @@ public class TCP_Receiver extends TCP_Receiver_ADT {
 		tcpH.setTh_eflag((byte)7);	//eFlag=0，信道无错误
 				
 		//发送数据报
-		client.send(replyPack);
+		//client.send(replyPack);
 		base = nowAcked + 100;
 		if (timer != null) {
 			timer.cancel();

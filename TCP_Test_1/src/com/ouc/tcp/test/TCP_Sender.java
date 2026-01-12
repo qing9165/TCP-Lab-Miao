@@ -11,7 +11,12 @@ import java.util.*;
 
 public class TCP_Sender extends TCP_Sender_ADT {
 
-	private static final int N = 8;
+	private int cwnd = 1;
+	private int ssthresh = 8;
+	private int dupAckCount = 0;
+	private int lastAcked = 0;
+	private int ackround = 0;
+
 	private Queue<TCP_PACKET> sentPackets = new LinkedList<>();
 	private int base = 1;
 	private UDT_Timer timer;
@@ -26,7 +31,7 @@ public class TCP_Sender extends TCP_Sender_ADT {
 	@Override
 	//可靠发送（应用层调用）：封装应用层数据，产生TCP数据报；需要修改
 	public void rdt_send(int dataIndex, int[] appData) {
-		while(sentPackets.size() >= N) {
+		while(sentPackets.size() >= cwnd) {
 			try {
 				Thread.sleep(10);
 			} catch (InterruptedException e) {
@@ -44,7 +49,8 @@ public class TCP_Sender extends TCP_Sender_ADT {
 
 		TCP_PACKET packCopy = createPackCopy(tcpPack);
 		sentPackets.add(packCopy);
-		System.out.println("Packets have been sent in Queue: "+sentPackets.peek().getTcpH().getTh_seq());
+		System.out.println("Packets have been sent in Queue: "+sentPackets.peek().getTcpH().getTh_seq()
+		+ "/" + cwnd + " ssthresh:" + ssthresh);
 
 		//发送TCP数据报
 		udt_send(tcpPack);
@@ -93,20 +99,34 @@ public class TCP_Sender extends TCP_Sender_ADT {
 		while(!ackQueue.isEmpty()){
 			int currentAck=ackQueue.poll();
 			System.out.println("CurrentAck: "+currentAck);
-			if (currentAck >= base) {
-				for (TCP_PACKET tcpPack : sentPackets) {
-					System.out.println("Packets in Queue: "+tcpPack.getTcpH().getTh_seq());
-				}
+			if (currentAck >= base) {//>=?
+				int packetsAcked = (currentAck - base) / 100 + 1;//计算已确认的包数?
+				ackround += packetsAcked;
 				while (!sentPackets.isEmpty() && sentPackets.peek().getTcpH().getTh_seq() <= currentAck) {
 					sentPackets.poll();
-					System.out.println("SentPacket: "+sentPackets.size());
 				}
 				base = currentAck + 100;
+				//更新拥塞窗口??
+				if (ackround >= cwnd && cwnd < 10) {
+					if (cwnd < ssthresh) {
+						cwnd *= 2;
+						System.out.println("SS:cwnd increased to: " + cwnd);
+					} else {
+						cwnd += 1;
+						System.out.println("CA:cwnd increased to: " + cwnd);
+					}
+					ackround = 0;
+				}
+				dupAckCount = 0;
+				lastAcked = currentAck;
 				if (sentPackets.isEmpty()) stopTimer();
 				else startTimer();
-			}else {
-				System.out.println("base: "+base);
-				System.out.println("Duplicate ACK for "+ currentAck);
+			}else if (currentAck <= lastAcked) {//<=??
+				dupAckCount++;
+				if (dupAckCount == 3) {
+					System.out.println("Fast Retransmission");
+					fastRetransmit();
+				}
 			}
 		}
 	}
@@ -129,14 +149,18 @@ public class TCP_Sender extends TCP_Sender_ADT {
 			@Override
 			public void run() {
 				System.out.println("Timeout! Retransmitting packets " );
-				for (TCP_PACKET packet : sentPackets) {
-					udt_send(packet);
+				if (!sentPackets.isEmpty()) {
+					udt_send(sentPackets.peek());
 				}
+				ssthresh = Math.max(cwnd/2, 2);
+				cwnd = 1;
+				dupAckCount = 0;
+				ackround = 0;
+				System.out.println("Timeout:ssthresh set to: " + ssthresh);
 				startTimer();
 			}
 		};
-		timer.schedule(task, 1000, 1000);
-		System.out.println("Timer started");
+		timer.schedule(task, 1500, 1500);
 	}
 
 	private void stopTimer() {
@@ -144,6 +168,17 @@ public class TCP_Sender extends TCP_Sender_ADT {
 			timer.cancel();
 			timer = null;
 		}
-		System.out.println("Timer cancelled");
+	}
+
+	private void fastRetransmit() {
+		if (!sentPackets.isEmpty()) {
+			udt_send(sentPackets.peek());
+			System.out.println("Fast Retransmit "+sentPackets.peek().getTcpH().getTh_seq());
+		}
+		ssthresh = Math.max(cwnd/2, 2);
+		cwnd = ssthresh;
+		dupAckCount = 0;
+		ackround = 0;
+		System.out.println("FR:ssthresh set to: " + ssthresh);
 	}
 }
