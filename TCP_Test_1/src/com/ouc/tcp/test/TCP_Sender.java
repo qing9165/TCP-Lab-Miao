@@ -34,25 +34,16 @@ public class TCP_Sender extends TCP_Sender_ADT {
 		tcpPack.setTcpH(tcpH);
 
 		int seq = dataIndex * appData.length + 1;
-		expectedAck = seq;;
+		expectedAck = seq;
 		
 		//发送TCP数据报
 		udt_send(tcpPack);
 		flag = 0;
 		
 		//等待ACK报文
-		long startTime = System.currentTimeMillis();
-		long timeout = 2000;
-
 		while (flag == 0){
 			//waitACK();
-			if (System.currentTimeMillis() - startTime > timeout) {
-				System.out.println("Timeout, retransmitting: " + tcpPack.getTcpH().getTh_seq());
-				udt_send(tcpPack);
-				startTime = System.currentTimeMillis();
-			}
 		}
-
 		System.out.println("Packet " + seq + "sent successfully.");
 	}
 	
@@ -60,7 +51,7 @@ public class TCP_Sender extends TCP_Sender_ADT {
 	//不可靠发送：将打包好的TCP数据报通过不可靠传输信道发送；仅需修改错误标志
 	public void udt_send(TCP_PACKET stcpPack) {
 		//设置错误控制标志
-		tcpH.setTh_eflag((byte)4);
+		tcpH.setTh_eflag((byte)1);
 		//System.out.println("to send: "+stcpPack.getTcpH().getTh_seq());				
 		//发送数据报
 		client.send(stcpPack);
@@ -78,13 +69,14 @@ public class TCP_Sender extends TCP_Sender_ADT {
 				System.out.println("Clear: "+tcpPack.getTcpH().getTh_seq());
 				flag = 1;
 				//break;
-			}else if(currentAck == expectedAck-100){
+			}else if(currentAck <= expectedAck-100){
 				System.out.println("Duplicate ACK received: " + currentAck);
 				System.out.println("Retransmit: "+tcpPack.getTcpH().getTh_seq());
 				udt_send(tcpPack);
 				flag = 0;
 			}else {
 				System.out.println("Unexpected ACK: " + currentAck);
+				udt_send(tcpPack);
 				flag = 0;
 			}
 		}
